@@ -1,0 +1,1435 @@
+\chapter{Implementación}
+Este capítulo está dedicado a la implementación realizada del proyecto. Tiene una estructura muy similar a la del capítulo \ref{cap6}, solo que en dicho capítulo se habla sobre el diseño y la metodología del proyecto y este está dedicado a su implementación en Python 3 \cite{python}.
+Para su desarrollo se han utilizado los notebooks de Jupyter \cite{jupyter}. Jupyter es una aplicación web de código abierto, que permite crear documentos donde se incluyen ecuaciones, texto, código, gráficas, etc. Además es compatible con una gran cantidad de bibliotecas de machine learning y procesamiento de datos.
+
+Las bibliotecas de ciencia de datos utilizadas para el desarrollo de este proyecto han sido:
+\begin{itemize}
+\item pandas: utilizada para el tratamiento y el análisis de los datos tratados. De gran utilidad con sus dataFrames para organizar los datos y exportarlos e importarlos en sus correspondientes .csv \cite{pandas}.
+\end{itemize}
+\begin{lstlisting}
+import pandas as pd
+\end{lstlisting}
+
+\begin{itemize}
+\item numpy: librería que añade funcionalidad a Python con un gran aporte sobre matrices y vectores. Es complementaria a pandas y de gran utilidad en conjunto \cite{numpy}.
+\end{itemize}
+\begin{lstlisting}
+import numpy as np
+\end{lstlisting}
+
+
+Para el procesamiento de señales se ha utilizado:
+\begin{itemize}
+\item scipy: librería especializada en matemáticas, ciencia e ingeniería. Aporta diversos módulos especializados en diversos temas. El más utilizado en este proyecto fue signal, utilizada para el procesamiento de señales (FFT, PSD, welch) \cite{scipy,scipysignal}.
+\end{itemize}
+
+\begin{lstlisting}
+import scipy as sp
+from scipy import signal
+from scipy.fftpack import rfft,rfftfreq
+\end{lstlisting}
+
+Para dibujar las diferentes gráficas obtenidas se ha hecho uso de:
+\begin{itemize}
+\item matplotlib: aporta la funcionalidad para la visualización de los datos procesados con Python \cite{matplotlib}.
+\end{itemize}
+
+\begin{lstlisting}
+import matplotlib.pyplot as plt
+\end{lstlisting}
+
+Para el procesamiento de archivos:
+\begin{itemize}
+\item glob: aporta la funcionalidad para abrir la base de datos utilizada y examinar cada uno de los archivos que la forman.
+\end{itemize}
+
+\begin{lstlisting}
+import glob
+\end{lstlisting}
+
+Para la parte de machine learning del proyecto se ha utilizado la biblioteca de pyhton:
+\begin{itemize}
+\item scikit-learn: aporta una gran funcionalidad con una gran cantidad de algoritmos relacionados con el machine learning \cite{scikit}.
+\end{itemize}
+
+
+El resto de módulos relacionados con scikit-learn, como por ejemplo, para los clasificadores, selección de características y rendimiento, serán explicados en sus correspondientes secciones. Esto fue una breve introducción con las bibliotecas generales.
+
+
+\section{Estimación del tamaño de ventana}
+El proceso dedicado a la estimación del tamaño de ventana se ha realizado con el uso de la biblioteca de biosignalsnotebooks \cite{biosignal}.
+
+\begin{lstlisting}
+import biosignalsnotebooks as bsnb
+\end{lstlisting}
+
+Para dicho proceso, con el uso de la función:
+\begin{lstlisting}
+activacion1=bsnb.detect_emg_activations(vastoMedialIzquierdo,fs,smooth_level=smooth,threshold_level=threshold,time_units=False,volts=False, resolution=None,plot_result=plot)
+\end{lstlisting}
+
+se obtiene un array con todos los intervalos donde se ha detectado actividad muscular en el archivo de EMG bruto. Con esto ya tenemos el tamaño de ventana de cada repetición y podemos continuar con la extracción de características con dicho tamaño de ventana. Cabe destacar que cada repetición de sentadilla puede tener un tamaño de  ventana diferente.
+
+Por último antes de seguir con la fase de extracción de características, habría que señalar el proceso de selección de los archivos brutos de EMG mejor definidos. Esto es debido a que había ciertos archivos donde claramente no había 12 repeticiones registradas o donde había demasiado ruido y el algoritmo utilizado no detectaba claramente las 12 repeticiones, por lo que opté, por implementar un código donde se examinan todos los archivos definidos con diferentes valores de threshold y de smooth, para así hallar cual sería el par de valores más adecuado a cada archivo de EMG y utilizar dichos archivos junto con su par de valores "threshold, smooth" para la extracción de características. A continuación se muestra la función que realiza dicho procedimiento:
+
+
+
+\begin{lstlisting}[language=Python]
+def hallarArchivosEMG():
+    
+    fs=1024
+    dataset=glob.glob("../Estudio tDCS/*.csv")
+    dataset.sort()
+
+    archivosFinales=[]
+    archivos=[]
+    valoresSM=[22,21,20,19,18,17,16,15,14]
+    valoresTH=[60,57,55,52,50,47,45,42,40,
+    37,35,32,30,27,25,22,20,19,18,17,16,15,14,13,12,11,10]
+    
+    for sm in valoresSM:
+        
+        for th in valoresTH:
+
+            for archivo in dataset:
+
+                if archivo not in archivos:
+
+                    df = pd.read_csv(archivo,delimiter=";",decimal=",")
+                    df=df.fillna(0)
+
+                    #Pierna izquieda
+                    vastoMedialIzquierdo= df['emg_muscle_1_(µV)'].to_numpy()
+                    rectoFemoralIzquierdo=df['emg_muscle_2_(µV)'].to_numpy()
+
+                    #Pierna derecha
+                    vastoMedialDerecho=df['emg_muscle_3_(µV)'].to_numpy()
+                    rectoFemoralDerecho=df['emg_muscle_4_(µV)'].to_numpy()
+
+
+                    #Atributos para detectar EMG
+                    plot=False
+                    smooth=sm
+                    threshold=th
+
+                    activacion1=bsnb.detect_emg_activations(vastoMedialIzquierdo,fs,smooth_level=smooth, threshold_level=threshold, time_units=False,volts=False, resolution=None,plot_result=plot)
+                    
+                    if (len(activacion1[0]) != 12):
+                        continue
+                    
+                    activacion2=bsnb.detect_emg_activations(rectoFemoralIzquierdo,fs,smooth_level=smooth, threshold_level=threshold,
+time_units=False,volts=False, resolution=None,plot_result=plot)
+
+                    if (len(activacion2[0]) != 12):
+                        continue
+                    
+                    activacion3=bsnb.detect_emg_activations(vastoMedialDerecho,fs,smooth_level=smooth, threshold_level=threshold,
+time_units=False,volts=False, resolution=None,plot_result=plot)
+                    
+                    if (len(activacion3[0]) != 12):
+                        continue
+                    activacion4=bsnb.detect_emg_activations(rectoFemoralDerecho,fs,smooth_level=smooth, threshold_level=threshold,
+time_units=False,volts=False, resolution=None,plot_result=plot)
+                    if (len(activacion4[0]) != 12):
+                        continue
+
+                    datosImportantes=[]
+                    datosImportantes.append(archivo)
+                    datosImportantes.append(threshold)
+                    datosImportantes.append(smooth)
+                    archivos.append(archivo)
+
+                    archivosFinales.append(datosImportantes)
+    
+    return archivosFinales
+    
+\end{lstlisting}
+
+\section{Extracción de características}
+Después de analizar todos los archivos disponibles y realizar su correspondiente estimación de los valores de ventana, podemos proceder a comentar la siguiente fase, la fase de extracción de características. Para la implementación de cada característica me he basado en la función que la define y la he implementado sobre Python. Se aconseja visitar el anexo para ver el código implementado asociado a cada característica. (Ver \ref{anexocaracImple}).
+
+
+\section{Estimación de fatiga}
+Para la estimación de la fatiga comentada, se obtienen las etiquetas de fatiga experimentada, representadas por 1, y fatiga no experimentada, representadas por 0, con el siguiente código. Su funcionamiento es recibir las velocidades de cada una de de las repeticiones registradas y hallar el valor de la etiqueta de la fatiga, basándose en un umbral de caída de velocidad, el cuál viene dado por una caída del 20 por ciento en la velocidad con respecto a la primera repetición.
+
+\begin{lstlisting}
+def calculoDeFatiga(velocidad):
+    fatiga=[]
+    
+    umbral=0.8*velocidad[0]
+    c=0
+    for i in range(0,10):
+        c=c+1
+        if ((velocidad[i] <= umbral) and (velocidad[i+1] <= umbral) ):
+            for j in range(i,12):
+                fatiga.append(1)
+            
+            return np.asarray(fatiga)
+        
+        else:
+            fatiga.append(0)
+            
+        
+    if (len(fatiga) != 12):
+        if ((velocidad[c] <= umbral) and (velocidad[c+1] <= umbral)):
+            for i in range(len(fatiga),12):
+                fatiga.append(1)
+        else:
+            for i in range(len(fatiga),12):
+                fatiga.append(0)
+    
+    return np.asarray(fatiga)
+\end{lstlisting}
+
+\section{Selección de características: RFE}
+Como se ha explicado en la fase de diseño, el algoritmo utilizado para la selección de las características más representativas de la fatiga y así obtener unos modelos más sencillos ha sido el Recursive Feature Elimination (RFE). Para su desarrollo se ha hecho uso de la biblioteca scikit-learn de Python con su módulo de selección de características \cite{rfecv}.
+
+A cada uno de los archivos de entrenamiento-testeo de cada canal se le aplica dicho algoritmo, y se extraen 3 archivos de entrenamiento-testeo para cada canal, cada uno con un número diferente de características. 
+
+    \subsection{Canal 1, canal 2, canal 3, canal 4}
+Aplicación del RFE a los archivos de entrenamiento-testeo de los canales 1, 2, 3 y 4 con valores de N = 1, 2, 5, donde N es el número de características finales del modelo.
+\begin{lstlisting}
+caracteristicas=['RMS','MAV','ZC','WL','SSC','IEMG','SSI','VAR','TM3','TM4','TM5','LOG','ACC','MNF','MDF']
+#[0] -> N=1 canal 1
+#[1] -> N=1 canal 2
+#[2] -> N=1 canal 3
+#[3] -> N=1 canal 4
+
+#[4] -> N=2 canal 1
+#[5] -> N=2 canal 2
+#[6] -> N=2 canal 3
+#[7] -> N=2 canal 4
+
+listaDeAtributos=[]
+numeroCaracteristicas=[1,2,5]
+
+
+for i in numeroCaracteristicas:
+    canal=1
+    #Recorro la lista con los valores de los 4 canales
+    for dato in datos1234:
+
+        x=dato.to_numpy()
+        y=valores1234['fatiga'].to_numpy()
+
+        
+        estimator = SVC(kernel="linear")
+    
+        print("N = " + str(i) + " ------------------------------------------------")
+        print("estimacion canal : " + str(canal))
+
+        selector= RFECV(estimator,step=1,cv=15,min_features_to_select=i)
+        selector=selector.fit(x,y)
+
+        ni=np.array(selector.support_)
+        pi=pd.DataFrame(data=ni,columns=['Validez'])
+
+        pi['Caracteristica']=caracteristicas
+        pi['canal']=canal
+        pi = pi.drop(pi[pi.Validez == False].index)
+
+        print(pi)
+        print("\n\n")
+
+        listaDeAtributos.append(pi['Caracteristica'])
+        #listaDeAtributos.append(pi)
+
+        canal=canal+1
+
+#obtengo el dataset para cada clasificador
+datosFinales1234=[]
+
+i=0
+for caracteristicas in listaDeAtributos:
+    if (i > 3):
+        i=0
+        
+    p=pd.DataFrame()
+    for caracteristica in caracteristicas:
+        p[caracteristica + str(i+1)]=valores1234[caracteristica + str(i+1)]
+    i=i+1
+
+    p=(p-p.min())/(p.max()-p.min())
+    datosFinales1234.append(p)
+\end{lstlisting}
+
+
+
+    \subsection{Canal 1,2 y canal 3,4}
+        \subsubsection{Canal 1,2}
+Aplicación del RFE al archivo de entrenamiento-testeo del canal 1, 2 con valores de N = 1, 2, 5, donde N es el número de características finales del modelo.
+\begin{lstlisting}
+caracteristicas=['RMS','MAV','ZC','WL','SSC','IEMG','SSI','VAR','TM3','TM4','TM5','LOG','ACC','MNF','MDF']
+
+numeroCaracteristicas=[1,2,5]
+
+RFEcanal12=[]
+
+
+
+for i in numeroCaracteristicas:
+    
+    
+    x = valores12.drop(['fatiga'],axis=1).to_numpy()
+    y = valores12['fatiga'].to_numpy()
+
+    estimator= SVC(kernel='linear')
+
+    selector= RFECV(estimator,step=1,cv=15,min_features_to_select=i)
+    selector=selector.fit(x,y)
+    ni=np.array(selector.support_)
+
+    pi=pd.DataFrame(data=ni,columns=['Validez'])
+
+    pi['Caracteristica']=caracteristicas
+
+    pi = pi.drop(pi[pi.Validez == False].index)
+
+    
+    print("N= " + str(i))
+    print(pi)
+    print("\n\n")
+
+
+    datosFinalesTotales=pd.DataFrame()
+    for caracteristica in pi['Caracteristica']:
+        datosFinalesTotales[caracteristica]=valores12[caracteristica]
+
+
+    RFEcanal12.append(datosFinalesTotales)
+
+
+RFEcanal12
+\end{lstlisting}
+
+        \subsubsection{Canal 3,4}
+Aplicación del RFE al archivo de entrenamiento-testeo del canal 3, 4 con valores de N = 1, 2, 5, donde N es el número de características finales del modelo.
+\begin{lstlisting}
+caracteristicas=['RMS','MAV','ZC','WL','SSC','IEMG','SSI','VAR','TM3','TM4','TM5','LOG','ACC','MNF','MDF']
+
+numeroCaracteristicas=[1,2,5]
+
+RFEcanal34=[]
+
+for i in numeroCaracteristicas:
+    
+    x = valores34.drop(['fatiga'],axis=1).to_numpy()
+    y = valores34['fatiga'].to_numpy()
+
+    estimator= SVC(kernel='linear')
+
+    selector= RFECV(estimator,step=1,cv=15,min_features_to_select=i)
+    selector=selector.fit(x,y)
+    ni=np.array(selector.support_)
+
+    pi=pd.DataFrame(data=ni,columns=['Validez'])
+
+    pi['Caracteristica']=caracteristicas
+
+    pi = pi.drop(pi[pi.Validez == False].index)
+
+    
+    print("N= " + str(i))
+    print(pi)
+    print("\n\n")
+
+    
+    datosFinalesTotales=pd.DataFrame()
+    for caracteristica in pi['Caracteristica']:
+        datosFinalesTotales[caracteristica]=valores34[caracteristica]
+
+
+    RFEcanal34.append(datosFinalesTotales)
+
+
+RFEcanal34
+\end{lstlisting}
+\newpage
+    \subsection{Canal total}
+Aplicación del RFE al archivo de entrenamiento-testeo del canal total con valores de N = 1, 2, 5, donde N es el número de características finales del modelo.
+\begin{lstlisting}
+caracteristicas=['RMS','MAV','ZC','WL','SSC','IEMG','SSI','VAR','TM3','TM4','TM5','LOG','ACC','MNF','MDF']
+numeroCaracteristicas=[1,2,5]
+
+RFEcompleto=[]
+
+for i in numeroCaracteristicas:
+
+    
+    
+    x = datosTotales.to_numpy()
+    y = valoresTotales['fatiga'].to_numpy()
+
+    estimator= SVC(kernel='linear')
+
+    selector= RFECV(estimator,step=1,cv=15,min_features_to_select=i)
+    selector=selector.fit(x,y)
+    ni=np.array(selector.support_)
+
+    pi=pd.DataFrame(data=ni,columns=['Validez'])
+
+    pi['Caracteristica']=caracteristicas
+
+    pi = pi.drop(pi[pi.Validez == False].index)
+
+    
+    print("N= " + str(i))
+    print(pi)
+    print("\n\n")
+
+
+    datosFinalesTotales=pd.DataFrame()
+    for caracteristica in pi['Caracteristica']:
+        datosFinalesTotales[caracteristica]=datosTotales[caracteristica]
+
+
+    RFEcompleto.append(datosFinalesTotales)
+\end{lstlisting}
+
+\newpage
+\section{Clasificación binaria de señales}
+Como se explicó en el capítulo de metodología, se analizará el rendimiento de tres tipos de clasificadores en diferentes situaciones (Ver \ref{tiposClasificadores}).  
+ 
+
+\subsection{ Support vector machines (SVMs): máquinas de vector de soporte}
+Para su desarrollo se ha hecho uso del módulo \cite{scikitSVM}:
+\begin{lstlisting}
+from sklearn.svm import SVC
+\end{lstlisting}
+
+\subsubsection{Canal 1, canal 2, canal 3, canal 4}
+Código encargado de recorrer la lista de python que contiene los archivos de entrenamiento-testeo del canal 1, canal 2, canal 3 y del canal 4 y proceder a realizar la clasificación con validación cruzada de cada uno de los archivos, para analizar el rendimiento del SVM en dichos canales.
+
+\begin{lstlisting}
+canal=1
+for dato in datosFinales1234:
+    
+    if (canal>4):
+        canal=1
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print("Valores de canal " + str(canal) + " ------>")
+    
+    print(dato)
+    
+    x=dato.to_numpy()
+    y=valores1234['fatiga'].to_numpy()
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.20)
+
+    #Creo clasificador
+    clasificadorSVC = SVC(kernel='sigmoid')
+
+
+    #Entreno
+    clasificadorSVC.fit(X_train, y_train)
+
+    #Testeo 
+    y_pred = clasificadorSVC.predict(X_test)
+
+    
+    #Resultados
+    print(confusion_matrix(y_test,y_pred))
+    print(classification_report(y_test,y_pred))
+    
+    
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(clasificadorSVC, x, y, cv=15)
+    
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    
+    indice='N='+str(len(dato.columns))
+    
+    graficaSVM[indice]['canal '+str(canal)]=precision
+    
+    
+    if (canal ==1):
+        graficaCanal1[indice]['SVM']=precision
+        graficaCanal1Desviacion[indice]['SVM']=desviacion
+        
+    elif (canal == 2):
+        graficaCanal2[indice]['SVM']=precision
+        graficaCanal2Desviacion[indice]['SVM']=desviacion
+        
+    elif (canal ==3):
+        graficaCanal3[indice]['SVM']=precision
+        graficaCanal3Desviacion[indice]['SVM']=desviacion
+        
+    elif (canal ==4):
+        graficaCanal4[indice]['SVM']=precision
+        graficaCanal4Desviacion[indice]['SVM']=desviacion
+        
+    canal=canal+1
+    
+    print("\n")
+\end{lstlisting}
+
+
+\subsubsection{Canal 1,2 y canal 3,4}
+Códigos encargados de clasificar los diferentes archivos de entrenamiento-testeo para el canal 1,2 y el canal 3,4.  Se realiza la validación cruzada de cada canal para analizar el rendimiento del SVM en dichos canales.
+    \subsubsection{Canal 1,2}
+    \begin{lstlisting}
+    canal='canal 1,2'
+
+for dato in RFEcanal12:
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print(dato)
+    
+    
+    x=dato.to_numpy()
+    y=valores12['fatiga'].to_numpy()
+
+    
+    #y=np.random.randint(2,size=1056)
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.20)
+    
+    #Creo clasificador
+    clasificadorSVC = SVC(kernel='sigmoid')
+
+
+    #Entreno
+    clasificadorSVC.fit(X_train, y_train)
+
+    #Testeo 
+    y_pred = clasificadorSVC.predict(X_test)
+
+
+    #Resultados
+    print(confusion_matrix(y_test,y_pred))
+    print(classification_report(y_test,y_pred))
+
+
+
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(clasificadorSVC, x, y, cv=15)
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    
+    
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    indice='N='+str(len(dato.columns))
+    
+    graficaSVM[indice][canal]=precision
+    graficaCanal12[indice]['SVM']=precision
+    graficaCanal12Desviacion[indice]['SVM']=desviacion
+    \end{lstlisting}
+    \subsubsection{{Canal 3,4}}
+    \begin{lstlisting}
+    canal='canal 3,4'
+
+for dato in RFEcanal34:
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print(dato)
+    
+    
+    x=dato.to_numpy()
+    y=valores34['fatiga'].to_numpy()
+
+    
+    #y=np.random.randint(2,size=1056)
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.20)
+    
+    #Creo clasificador
+    clasificadorSVC = SVC(kernel='sigmoid')
+
+
+    #Entreno
+    clasificadorSVC.fit(X_train, y_train)
+
+    #Testeo 
+    y_pred = clasificadorSVC.predict(X_test)
+
+
+    #Resultados
+    print(confusion_matrix(y_test,y_pred))
+    print(classification_report(y_test,y_pred))
+
+
+
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(clasificadorSVC, x, y, cv=15)
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    
+    indice='N='+str(len(dato.columns))
+    
+    graficaSVM[indice][canal]=precision
+    graficaCanal34[indice]['SVM']=precision
+    graficaCanal34Desviacion[indice]['SVM']=desviacion
+    \end{lstlisting}
+    
+\subsubsection{Canal total}
+Código encargado de clasificar por medio de la validación cruzada el archivo de entrenamiento-testeo correspondiente al canal total para analizar el rendimiento del SVM en dicho canal.
+\begin{lstlisting}
+canal='canal Total'
+
+for dato in RFEcompleto:
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print(dato)
+    
+    
+    x=dato.to_numpy()
+    y=valoresTotales['fatiga'].to_numpy()
+
+    
+    #y=np.random.randint(2,size=1056)
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.20)
+    
+    #Creo clasificador
+    clasificadorSVC = SVC(kernel='sigmoid')
+
+
+    #Entreno
+    clasificadorSVC.fit(X_train, y_train)
+
+    #Testeo 
+    y_pred = clasificadorSVC.predict(X_test)
+
+
+    #Resultados
+    print(confusion_matrix(y_test,y_pred))
+    print(classification_report(y_test,y_pred))
+
+
+
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(clasificadorSVC, x, y, cv=15)
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    
+    
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    indice='N='+str(len(dato.columns))
+
+    
+    graficaSVM[indice][canal]=precision
+    graficaCanalTotal[indice]['SVM']=precision
+    graficaCanalTotalDesviacion[indice]['SVM']=resultados['test_score'].std()
+\end{lstlisting}
+
+\subsection{Decision trees (Trees): árboles de decisión}
+Para su desarrollo se ha hecho uso del módulo \cite{scikitTree}:
+\begin{lstlisting}
+from sklearn.tree import DecisionTreeClassifier
+\end{lstlisting}
+
+\subsubsection{Canal 1, canal 2, canal 3, canal 4}
+Código encargado de recorrer la lista de python que contiene los archivos de entrenamiento-testeo del canal 1, canal 2, canal 3 y del canal 4 y proceder a realizar la clasificación con validación cruzada de cada uno de los archivos, para analizar el rendimiento del Tree en dichos canales.
+
+\begin{lstlisting}
+canal=1
+for dato in datosFinales1234:
+    
+    if (canal>4):
+        canal=1
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print("Valores de canal " + str(canal) + " ------>")
+    
+    print(dato)
+    
+    x=dato.to_numpy()
+    y=valores1234['fatiga'].to_numpy()
+    
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.20)
+
+    #Creo clasificador
+    clasificadorTree = DecisionTreeClassifier(random_state=0)
+
+    #Entreno
+    clasificadorTree.fit(X_train, y_train)
+
+    #Testeo 
+    y_pred = clasificadorTree.predict(X_test)
+
+    
+    #Resultados
+    print(confusion_matrix(y_test,y_pred))
+    print(classification_report(y_test,y_pred))
+    
+
+    
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(clasificadorTree, x, y, cv=15)
+    
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    
+    indice='N='+str(len(dato.columns))
+    graficaTree[indice]['canal '+str(canal)]=precision
+    
+    if (canal ==1):
+        graficaCanal1[indice]['TREE']=precision
+        graficaCanal1Desviacion[indice]['TREE']=desviacion
+        
+    elif (canal == 2):
+        graficaCanal2[indice]['TREE']=precision
+        graficaCanal2Desviacion[indice]['TREE']=desviacion
+        
+    elif (canal ==3):
+        graficaCanal3[indice]['TREE']=precision
+        graficaCanal3Desviacion[indice]['TREE']=desviacion
+        
+    elif (canal ==4):
+        graficaCanal4[indice]['TREE']=precision
+        graficaCanal4Desviacion[indice]['TREE']=desviacion
+        
+    canal=canal+1
+    
+    print("\n")
+    
+\end{lstlisting}
+
+\subsubsection{Canal 1,2 y canal 3,4}
+Códigos encargados de clasificar los diferentes archivos de entrenamiento-testeo para el canal 1,2 y el canal 3,4.  Se realiza la validación cruzada de cada canal para analizar el rendimiento del Tree en dichos canales.
+    \subsubsection{Canal 1,2}
+\begin{lstlisting}
+canal='canal 1,2'
+
+for dato in RFEcanal12:
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print(dato)
+    
+    
+    x=dato.to_numpy()
+    y=valores12['fatiga'].to_numpy()
+
+    
+    #y=np.random.randint(2,size=1056)
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.20)
+    
+    #Creo clasificador
+    clasificadorTree = DecisionTreeClassifier(random_state=0)
+
+
+    #Entreno
+    clasificadorTree.fit(X_train, y_train)
+
+    #Testeo 
+    y_pred = clasificadorTree.predict(X_test)
+
+
+    #Resultados
+    print(confusion_matrix(y_test,y_pred))
+    print(classification_report(y_test,y_pred))
+
+
+
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(clasificadorTree, x, y, cv=15)
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    
+    indice='N='+str(len(dato.columns))
+    
+    graficaTree[indice][canal]=precision
+    graficaCanal12[indice]['TREE']=precision
+    graficaCanal12Desviacion[indice]['TREE']=desviacion
+\end{lstlisting}
+    \subsubsection{{Canal 3,4}}
+\begin{lstlisting}
+canal='canal 3,4'
+
+for dato in RFEcanal34:
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print(dato)
+    
+    
+    x=dato.to_numpy()
+    y=valores34['fatiga'].to_numpy()
+
+    
+    #y=np.random.randint(2,size=1056)
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.20)
+    
+    #Creo clasificador
+    clasificadorTree = DecisionTreeClassifier(random_state=0)
+
+
+    #Entreno
+    clasificadorTree.fit(X_train, y_train)
+
+    #Testeo 
+    y_pred = clasificadorTree.predict(X_test)
+
+
+    #Resultados
+    print(confusion_matrix(y_test,y_pred))
+    print(classification_report(y_test,y_pred))
+
+
+
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(clasificadorTree, x, y, cv=15)
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    indice='N='+str(len(dato.columns))
+    
+    graficaTree[indice][canal]=precision
+    graficaCanal34[indice]['TREE']=precision
+    graficaCanal34Desviacion[indice]['TREE']=desviacion
+\end{lstlisting}
+    
+    \subsubsection{Canal total}
+Código encargado de clasificar por medio de la validación cruzada el archivo de entrenamiento-testeo correspondiente al canal total para analizar el rendimiento del Tree en dicho canal.
+\begin{lstlisting}
+for dato in RFEcompleto:
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print(dato)
+
+    x=dato.to_numpy()
+    y=valoresTotales['fatiga'].to_numpy()
+
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size = 0.20)
+
+    #Creo clasificador
+    clasificadorTree = DecisionTreeClassifier(random_state=0)
+
+
+    #Entreno
+    clasificadorTree.fit(X_train,y_train)
+
+    #Testeo 
+    y_pred = clasificadorTree.predict(X_test)
+
+
+    #Resultados
+    print(confusion_matrix(y_test,y_pred))
+    print(classification_report(y_test,y_pred))
+
+
+
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(clasificadorTree, x, y, cv=15)
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    
+    indice='N='+str(len(dato.columns))
+    
+    graficaTree[indice]['canal Total']=precision
+    graficaCanalTotal[indice]['TREE']=precision
+    graficaCanalTotalDesviacion[indice]['TREE']=desviacion
+\end{lstlisting}
+
+
+\subsection{K nearest neighbors (KNN): K vecinos más cercanos}
+Para su desarrollo se ha hecho uso del módulo \cite{scikitKNN}:
+\begin{lstlisting}
+from sklearn.neighbors import KNeighborsClassifier
+\end{lstlisting}
+
+\subsubsection{Canal 1, canal 2, canal 3, canal 4}
+Código encargado de recorrer la lista de python que contiene los archivos de entrenamiento-testeo del canal 1, canal 2, canal 3 y del canal 4 y proceder a realizar la clasificación con validación cruzada de cada uno de los archivos, para analizar el rendimiento del KNN en dichos canales.
+\begin{lstlisting}
+canal=1
+for dato in datosFinales1234:
+    if (canal > 4):
+        canal=1
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print("Valores de canal " + str(canal) + " ------>")
+    
+    print(dato)
+    
+    x=dato.to_numpy()
+    y=valores1234['fatiga'].to_numpy()
+    
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.20)
+
+    #K=6
+    KNN = KNeighborsClassifier(n_neighbors=6)
+    
+    KNN.fit(X_train, y_train)
+
+
+    y_pred = KNN.predict(X_test)
+
+    #Resultados
+    print(confusion_matrix(y_test, y_pred))
+    print(classification_report(y_test, y_pred))
+
+    
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(KNN, x, y, cv=15)
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    indice='N='+str(len(dato.columns))
+    
+    
+    graficaKNN[indice]['canal '+str(canal)]=precision
+    if (canal ==1):
+        graficaCanal1[indice]['KNN']=precision
+        graficaCanal1Desviacion[indice]['KNN']=desviacion
+        
+    elif (canal == 2):
+        graficaCanal2[indice]['KNN']=precision
+        graficaCanal2Desviacion[indice]['KNN']=desviacion
+        
+    elif (canal ==3):
+        graficaCanal3[indice]['KNN']=precision
+        graficaCanal3Desviacion[indice]['KNN']=desviacion
+        
+    elif (canal ==4):
+        graficaCanal4[indice]['KNN']=precision
+        graficaCanal4Desviacion[indice]['KNN']=desviacion
+        
+    canal=canal+1
+    
+    print("\n")
+\end{lstlisting}
+
+    \subsubsection{Canal 1,2 y canal 3,4}
+Códigos encargados de clasificar los diferentes archivos de entrenamiento-testeo para el canal 1,2 y el canal 3,4.  Se realiza la validación cruzada de cada canal para analizar el rendimiento del KNN en dichos canales.
+    \subsubsection{Canal 1,2}
+\begin{lstlisting}
+canal='canal 1,2'
+
+for dato in RFEcanal12:
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print(dato)
+    
+    
+    x=dato.to_numpy()
+    y=valores12['fatiga'].to_numpy()
+    
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.20)
+
+    #K=6
+    KNN = KNeighborsClassifier(n_neighbors=6)
+    
+    KNN.fit(X_train, y_train)
+
+
+    y_pred = KNN.predict(X_test)
+
+    #Resultados
+    print(confusion_matrix(y_test, y_pred))
+    print(classification_report(y_test, y_pred))
+
+    
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(KNN, x, y, cv=15)
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    
+    indice='N='+str(len(dato.columns))
+    
+    graficaKNN[indice][canal]=precision
+    graficaCanal12[indice]['KNN']=precision
+    graficaCanal12Desviacion[indice]['KNN']=desviacion
+\end{lstlisting}
+
+    \subsubsection{{Canal 3,4}}
+\begin{lstlisting}
+canal='canal 3,4'
+
+for dato in RFEcanal34:
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print(dato)
+    
+    
+    x=dato.to_numpy()
+    y=valores34['fatiga'].to_numpy()
+    
+    
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.20)
+
+    #K=6
+    KNN = KNeighborsClassifier(n_neighbors=6)
+    
+    KNN.fit(X_train, y_train)
+
+
+    y_pred = KNN.predict(X_test)
+
+    #Resultados
+    print(confusion_matrix(y_test, y_pred))
+    print(classification_report(y_test, y_pred))
+
+    
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(KNN, x, y, cv=15)
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    indice='N='+str(len(dato.columns))
+    
+    graficaKNN[indice][str(canal)]=precision
+    graficaCanal34[indice]['KNN']=precision
+    graficaCanal34Desviacion[indice]['KNN']=desviacion
+\end{lstlisting}
+    
+    \subsubsection{Canal total}
+Código encargado de clasificar por medio de la validación cruzada el archivo de entrenamiento-testeo correspondiente al canal total para analizar el rendimiento del KNN en dicho canal.
+\begin{lstlisting}
+canal='canal Total'
+
+
+for dato in RFEcompleto:
+    
+    print("N = " + str(len(dato.columns)) + " -------------------------->")
+    print(dato)
+    
+    x=dato.to_numpy()
+    y=valoresTotales['fatiga'].to_numpy()
+
+
+
+    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.20)
+
+    #K=6
+    KNN = KNeighborsClassifier(n_neighbors=6)
+    
+    KNN.fit(X_train, y_train)
+
+
+    y_pred = KNN.predict(X_test)
+
+    #Resultados
+    print(confusion_matrix(y_test, y_pred))
+    print(classification_report(y_test, y_pred))
+
+    
+    #Cross validation k-fold (precision total)
+    resultados = cross_validate(KNN, x, y, cv=15)
+    
+    precision=resultados['test_score'].mean()
+    desviacion=resultados['test_score'].std()
+    
+    print("Precision : " + str(precision) + " +/- " + str(desviacion))
+    
+    indice='N='+str(len(dato.columns))
+    
+    graficaKNN[indice][canal]=precision
+    graficaCanalTotal[indice]['KNN']=precision
+    graficaCanalTotalDesviacion[indice]['KNN']=desviacion
+\end{lstlisting}
+
+
+\section{Estudio del rendimiento obtenido: validación cruzada}
+Para analizar el rendimiento de cada clasificador en cada uno de los canales estudiados, se ha hecho uso de la validación cruzada. Se ha usado un valor de 15. Cada uno de los valores hallados (media de la precisión y desviación típica), son almacenados en un dataframe para el posterior análisis del rendimiento. Para hacer esto posible se ha hecho uso de del módulo  \cite{scikitCV}:
+\begin{lstlisting}
+from sklearn.model_selection import cross_validate
+\end{lstlisting}
+
+Código extraído de los anteriores, donde se muestra el uso de la validación cruzada para el KNN:
+\begin{lstlisting}
+
+#K=6
+KNN = KNeighborsClassifier(n_neighbors=6)
+
+x=dato.to_numpy()
+y=valores34['fatiga'].to_numpy()
+
+#Cross validation k-fold (precision total)
+resultados = cross_validate(KNN, x, y, cv=10)
+precision=resultados['test_score'].mean()
+desviacion=resultados['test_score'].std()
+    
+print("Precision : " + str(precision) + " +/- " + str(desviacion))
+
+
+\end{lstlisting}
+ 
+ 
+ 
+\section{Procesamiento de datos: diferentes modelos de estudio}
+Para la obtención de los archivos de entrenamiento-testeo correspondientes a cada uno de los canales estudiados, se ha implementado un código, donde se aplican las funciones de extracción de características anteriormente explicadas y se guardan los correspondientes datos en un archivo .csv, para así no perder tiempo de ejecución en próximas ejecuciones. 
+
+Para la extracción de las características se analiza la señal captada por cada canal y se le aplica las funciones de las características implementadas, con el tamaño de ventana oportuno para cada repetición detectada en la señal EMG. Todos los datos finales una vez son cargados desde su correspondiente archivo .csv son normalizados y sus valores entran en el rango [0,1].
+
+    \subsection{Canal 1, canal 2, canal 3, canal 4}
+    Para el procesamiento de datos de los canales 1, 2, 3 y 4, una misma función los realiza todos a la vez. Finalmente los guarda todos en un archivo en conjunto, y a la hora de cargar los datos desde el archivo creado, los divide en 4 dataset, cada uno, asociado a su correspondiente canal.
+    \begin{lstlisting}
+    
+    def getFeaturesToFileCanal1234():
+    
+    fs=1024.0
+    
+    caracteristicas=['RMS','MAV','ZC','WL','SSC','IEMG','SSI','VAR','TM3','TM4','TM5','LOG','ACC','MNF','MDF']
+    funciones={'RMS':RMS,'MAV':MAV,'ZC':ZC,'WL':WL,'SSC':SSC,'IEMG':IEMG,'SSI':SSI,'VAR':VAR,'TM3':TM3,
+               'TM4':TM4,'TM5':TM5,'LOG':LOG,'ACC':ACC,'MNF':MNF,'MDF':MDF}
+    index=[]
+
+    for c in caracteristicas:
+        for i in range(0,4):
+            index.append(c+str(i+1))
+       
+    #Cargo las velocidades y creo el vector donde guardo si hay o no fatiga
+    velocidades=pd.read_excel("../Estudio tDCS/velocidades.xlsx")
+    fatigas=np.array([])
+    
+    dfC=pd.DataFrame(columns=index)
+    
+    #Recorro todos los archivos anteriormente elegidos con las 12 repeticiones claras
+    indice=0
+    for dato in archivosElegidos:
+        
+        archivo=dato[0]
+        threshold=dato[1]
+        smooth=dato[2]
+        
+        archivoSinRuta=archivo.replace("../Estudio tDCS/","")
+        archivoSinRuta=archivoSinRuta.replace(".csv","")
+        
+        
+        velocidad=velocidades[archivoSinRuta]
+        valoresDeFatiga=calculoDeFatiga(velocidad)
+        print(archivoSinRuta)
+        print(valoresDeFatiga)
+        
+        fatigas = np.concatenate((fatigas, valoresDeFatiga))
+        
+        df = pd.read_csv(archivo,delimiter=";",decimal=",")
+        df=df.fillna(0)
+
+        #1-Obtengo EMG puro 
+        
+        #Pierna izquieda
+        vastoMedialIzquierdo= df['emg_muscle_1_(µV)'].to_numpy()
+        rectoFemoralIzquierdo=df['emg_muscle_2_(µV)'].to_numpy()
+
+        #Pierna derecha
+        vastoMedialDerecho=df['emg_muscle_3_(µV)'].to_numpy()
+        rectoFemoralDerecho=df['emg_muscle_4_(µV)'].to_numpy()
+        
+        
+        
+        #2-Calculo sus activaciones
+        activacion1=bsnb.detect_emg_activations(vastoMedialIzquierdo,fs,smooth_level=smooth, threshold_level=threshold,
+                                                    time_units=False,volts=False, resolution=None,plot_result=False)
+
+        activacion2=bsnb.detect_emg_activations(rectoFemoralIzquierdo,fs,smooth_level=smooth, threshold_level=threshold,
+                                                    time_units=False,volts=False, resolution=None,plot_result=False)
+
+        activacion3=bsnb.detect_emg_activations(vastoMedialDerecho,fs,smooth_level=smooth, threshold_level=threshold,
+                                                    time_units=False,volts=False, resolution=None,plot_result=False)
+
+        activacion4=bsnb.detect_emg_activations(rectoFemoralDerecho,fs,smooth_level=smooth, threshold_level=threshold,
+                                                    time_units=False,volts=False, resolution=None,plot_result=False)
+        
+        
+        vmI=[]
+        rfI=[]
+        vmD=[]
+        rfD=[]
+        
+        #3- Valores de emg acotados dependiendo de sus activaciones
+        #ej: vmI -> lista con los valores EMG de cada repeticion
+        for i,j in zip(activacion1[0],activacion1[1]):
+            vmI.append(vastoMedialIzquierdo[i:j])
+
+        for i,j in zip(activacion2[0],activacion2[1]):
+            rfI.append(rectoFemoralIzquierdo[i:j])
+            
+        for i,j in zip(activacion3[0],activacion3[1]):
+            vmD.append(vastoMedialDerecho[i:j])
+        
+        for i,j in zip(activacion4[0],activacion4[1]):
+            rfD.append(rectoFemoralDerecho[i:j])
+            
+            
+        for i,j,k,l in zip(vmI,rfI,vmD,rfD):
+            
+            # A cada archivo EMG (4 señales EMG diferentes = 4 canales) le extraigo una caracteristica  
+            datos=np.array([])
+            for caracteristica in caracteristicas:
+            
+                x1,y1=funciones[caracteristica](datos=i,ratio=i.size)
+                x2,y2=funciones[caracteristica](datos=j,ratio=j.size)
+                x3,y3=funciones[caracteristica](datos=k,ratio=k.size)
+                x4,y4=funciones[caracteristica](datos=l,ratio=l.size)
+
+                #Guardo todos los datos obtenido en un mismo array 
+                datos=np.append(datos,y1)
+                datos=np.append(datos,y2)
+                datos=np.append(datos,y3)
+                datos=np.append(datos,y4)
+        
+            #Añado al final del dataFrame los datos de un archivo (RMS,ARV,......,ZCC)
+            dfC.loc[indice]=datos
+            indice=indice+1
+      
+        #print("Log --> Archivo EMG: " + str(archivo) + " \n Archivo velocidad : "+ str(archivoSinRuta) )
+        
+    dfC['fatiga']=fatigas
+              
+    
+    dfC.to_csv('caracteristicasCanales1234.csv', index = False)
+    
+    return dfC
+    \end{lstlisting}
+    
+    
+    
+    Código correspondiente a cargar el archivo de datos anteriormente creado:
+    \begin{lstlisting}
+    
+valores1234= pd.read_csv("caracteristicasCanales1234.csv",delimiter=",",decimal=".")
+caracteristicas=['RMS','MAV','ZC','WL','SSC','IEMG','SSI','VAR','TM3','TM4','TM5','LOG','ACC','MNF','MDF']
+
+#Lista de dataframe con los datos de cada canal
+datos1234=[]
+
+
+#4 canales -> 4 clasificadores
+for i in range(1,5):
+    datosProcesados=pd.DataFrame()
+    for caracteristica in caracteristicas:
+        datosProcesados[caracteristica+str(i)]=valores1234[caracteristica+str(i)]
+        
+        
+    
+    
+    datosProcesados=(datosProcesados-datosProcesados.min())/(datosProcesados.max()-datosProcesados.min())
+    datos1234.append(datosProcesados)
+
+
+    \end{lstlisting}
+    
+    \subsection{Canal 1,2 y canal 3,4}
+    Con respecto a los archivos de entrenamiento-testeo de los canales 1,2 y 3,4, se forman a partir del archivo .csv creado anteriormente. Su procesamiento solo trata de agrupar los datos del canal 1,2 y los datos del canal 3,4.
+    
+    \subsubsection{Canal 1,2}
+        \begin{lstlisting}
+        valores1234= pd.read_csv("caracteristicasCanales1234.csv",delimiter=",",decimal=".")
+caracteristicas=['RMS','MAV','ZC','WL','SSC','IEMG','SSI','VAR','TM3','TM4','TM5','LOG','ACC','MNF','MDF']
+
+valores12=pd.DataFrame()
+for c in caracteristicas:
+    g=np.array([])
+    for i in range(1,3):
+        g=np.append(g,valores1234[c+str(i)].values)
+    
+    valores12[c]=g
+        
+
+valores12=(valores12-valores12.min())/(valores12.max()-valores12.min())
+
+fatiga=np.array(valores1234['fatiga'])
+
+fatiga=np.append(fatiga,valores1234['fatiga'])
+
+valores12['fatiga']=fatiga
+
+valores12
+        \end{lstlisting}
+        
+    \subsubsection{Canal 3,4}
+        \begin{lstlisting}
+        valores1234= pd.read_csv("caracteristicasCanales1234.csv",delimiter=",",decimal=".")
+caracteristicas=['RMS','MAV','ZC','WL','SSC','IEMG','SSI','VAR','TM3','TM4','TM5','LOG','ACC','MNF','MDF']
+
+valores34=pd.DataFrame()
+for c in caracteristicas:
+    g=np.array([])
+    for i in range(3,5):
+        g=np.append(g,valores1234[c+str(i)].values)
+    
+    valores34[c]=g
+        
+
+
+valores34=(valores34-valores34.min())/(valores34.max()-valores34.min())
+
+fatiga=np.array(valores1234['fatiga'])
+
+fatiga=np.append(fatiga,valores1234['fatiga'])
+
+valores34['fatiga']=fatiga
+
+valores34
+        \end{lstlisting}
+    
+    \subsection{Canal total}
+    Con respecto al archivo de entrenamiento-testeo del canal total, se vuelven a analizar todos los archivos EMG del dataset, y se genera un nuevo archivo .csv, que contiene los valores de los 4 canales agrupados.
+    \begin{lstlisting}
+    def getFeaturesToFileTotales():
+    
+    fs=1024.0
+    
+    caracteristicas=['RMS','MAV','ZC','WL','SSC','IEMG','SSI','VAR','TM3','TM4','TM5','LOG','ACC','MNF','MDF']
+    funciones={'RMS':RMS,'MAV':MAV,'ZC':ZC,'WL':WL,'SSC':SSC,'IEMG':IEMG,'SSI':SSI,'VAR':VAR,'TM3':TM3,
+               'TM4':TM4,'TM5':TM5,'LOG':LOG,'ACC':ACC,'MNF':MNF,'MDF':MDF}
+       
+    #Cargo las velocidades y creo el vector donde guardo si hay o no fatiga
+    velocidades=pd.read_excel("../Estudio tDCS/velocidades.xlsx")
+    
+    
+    dfC=pd.DataFrame()
+    
+    #Recorro todos los archivos anteriormente elegidos con las 12 repeticiones claras
+    indice=0
+    for dato in archivosElegidos:
+        
+        archivo=dato[0]
+        threshold=dato[1]
+        smooth=dato[2]
+        
+        archivoSinRuta=archivo.replace("../Estudio tDCS/","")
+        archivoSinRuta=archivoSinRuta.replace(".csv","")
+        
+        
+        velocidad=velocidades[archivoSinRuta]
+        valoresDeFatiga=calculoDeFatiga(velocidad)
+        
+        
+        fatigas=np.array([])
+        fatigas = np.concatenate((fatigas, valoresDeFatiga))
+        fatigas = np.concatenate((fatigas, valoresDeFatiga))
+        fatigas = np.concatenate((fatigas, valoresDeFatiga))
+        fatigas = np.concatenate((fatigas, valoresDeFatiga))
+        
+        print(archivoSinRuta)
+        print(valoresDeFatiga)
+        
+        df = pd.read_csv(archivo,delimiter=";",decimal=",")
+        df=df.fillna(0)
+
+        #1-Obtengo EMG puro 
+        
+        #Pierna izquieda
+        vastoMedialIzquierdo= df['emg_muscle_1_(µV)'].to_numpy()
+        rectoFemoralIzquierdo=df['emg_muscle_2_(µV)'].to_numpy()
+
+        #Pierna derecha
+        vastoMedialDerecho=df['emg_muscle_3_(µV)'].to_numpy()
+        rectoFemoralDerecho=df['emg_muscle_4_(µV)'].to_numpy()
+        
+        
+        
+        #2-Calculo sus activaciones
+        activacion1=bsnb.detect_emg_activations(vastoMedialIzquierdo,fs,smooth_level=smooth, threshold_level=threshold,
+                                                    time_units=False,volts=False, resolution=None,plot_result=False)
+
+        activacion2=bsnb.detect_emg_activations(rectoFemoralIzquierdo,fs,smooth_level=smooth, threshold_level=threshold,
+                                                    time_units=False,volts=False, resolution=None,plot_result=False)
+
+        activacion3=bsnb.detect_emg_activations(vastoMedialDerecho,fs,smooth_level=smooth, threshold_level=threshold,
+                                                    time_units=False,volts=False, resolution=None,plot_result=False)
+
+        activacion4=bsnb.detect_emg_activations(rectoFemoralDerecho,fs,smooth_level=smooth, threshold_level=threshold,
+                                                    time_units=False,volts=False, resolution=None,plot_result=False)
+        
+        
+        vmI=[]
+        rfI=[]
+        vmD=[]
+        rfD=[]
+        
+        #3- Valores de emg acotados dependiendo de sus activaciones
+        #ej: vmI -> lista con los valores EMG de cada repeticion
+        for i,j in zip(activacion1[0],activacion1[1]):
+            vmI.append(vastoMedialIzquierdo[i:j])
+
+        for i,j in zip(activacion2[0],activacion2[1]):
+            rfI.append(rectoFemoralIzquierdo[i:j])
+            
+        for i,j in zip(activacion3[0],activacion3[1]):
+            vmD.append(vastoMedialDerecho[i:j])
+        
+        for i,j in zip(activacion4[0],activacion4[1]):
+            rfD.append(rectoFemoralDerecho[i:j])
+        
+        
+        
+        dfCcaracteristica=pd.DataFrame()
+        for caracteristica in caracteristicas:
+            
+            
+            datos=np.array([])
+            for i in vmI:
+                x1,y1=funciones[caracteristica](datos=i,ratio=i.size)
+                datos=np.append(datos,y1)
+                
+            for j in rfI:
+                x2,y2=funciones[caracteristica](datos=j,ratio=j.size)
+                datos=np.append(datos,y2)
+                
+            for k in vmD:
+                x3,y3=funciones[caracteristica](datos=k,ratio=k.size)
+                datos=np.append(datos,y3)
+                
+            for l in rfD:
+                x4,y4=funciones[caracteristica](datos=l,ratio=l.size)
+                datos=np.append(datos,y4)
+                
+                
+            dfCcaracteristica[caracteristica]=datos
+            
+        
+        
+        dfCcaracteristica['fatiga']=fatigas
+        dfC=pd.concat([dfC, dfCcaracteristica], ignore_index=False)
+             
+                
+    
+    dfC.to_csv('caracteristicasTotales.csv', index = False)
+    
+    return dfC
+    \end{lstlisting}
+    
+    Finalmente bastaría con cargar dicho archivo:
+    \begin{lstlisting}
+    valoresTotales= pd.read_csv("caracteristicasTotales.csv",delimiter=",",decimal=".")
+
+
+datosTotales=valoresTotales.drop(['fatiga'],axis=1)
+
+datosTotales=(datosTotales-datosTotales.min())/(datosTotales.max()-datosTotales.min())
+
+datosTotales
+    \end{lstlisting}
+   

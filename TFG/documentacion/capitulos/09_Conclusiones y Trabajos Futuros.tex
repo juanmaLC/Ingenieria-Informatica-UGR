@@ -1,0 +1,39 @@
+\chapter{Conclusiones y Trabajos Futuros}
+Este capítulo está dedicado a realizar una conclusión final sobre el proyecto y a analizar si realmente se han cumplido los objetivos que se tenían antes de su comienzo. (Objetivos \ref{objetivos}).
+
+\section{Conclusiones}
+
+El objetivo final de este proyecto era el de diseñar un clasificador para detectar la fatiga muscular y así poder detectar anomalías en la rodilla. Pienso que este objetivo se ha cumplido satisfactoriamente ya que se ha realizado un análisis sobre el rendimiento de diversos clasificadores que resolvían el problema. Con ello se ha obtenido el clasificador con las mejores prestaciones. 
+
+Con respecto a los objetivos específicos, se ha conseguido analizar y procesar las señales brutas de EMG. Esto se ha resuelto con el hecho de detectar la activación muscular de cada repetición registrada para así estimar el tamaño de ventana correcto.
+
+Otro de los objetivos específicos fue analizar las velocidades registradas para estimar la fatiga de cada repetición. Para ello se acordó la estimación de un umbral de fatiga y la condición de que dicho umbral tenia que registrase dos veces seguidas.
+
+El siguiente objetivo específico y uno de los más importantes fue la extracción de características. Este objetivo es primordial ya que nos dota de la información necesaria para poder clasificar en un futuro las señales. Opino que se ha cumplido correctamente, ya que se han estudiado 15 características diferentes de la señal EMG.
+
+El objetivo de la creación de los archivos de entrenamiento-testeo también creo que se ha cumplido correctamente. Se han analizado los clasificadores con diferentes archivos de entrenamiento-testeo obtenidos gracias al procesamiento y extracción de las características de la señal EMG, tanto en el dominio del tiempo como en el dominio de la frecuencia.
+
+Otro de los objetivos importantes, era el diseño de un algoritmo de selección de características, para obtener unos modelos sencillos y eficaces. Para ello se ha indagado en el tema de la selección de características y llegado a la conclusión de que uno de los mejores algoritmos para ello era el RFE (Recursive Feautre Elimination).
+
+Los dos últimos objetivos, también se han realizado correctamente. Uno de ellos era investigar sobre que tipo de clasificadores de aprendizaje supervisado era el más adecuado para la resolución del proyecto. 
+
+El último objetivo, que es complementario al anterior, ha sido la validación de los resultados obtenidos por los clasificadores. Para ello se ha hecho uso de la validación cruzada, para estimar así una precisión y desviación a cada clasificador en cada una de las situaciones estudiadas.
+
+
+Como conclusión final, lo que se ha conseguido es realizar un estudio sobre que clasificador sería el mejor a la hora de resolver el problema de la detección de la fatiga. Además se ha indagado en el problema, y también se aportan diferentes soluciones, en caso de que la herramienta futura que se utilice no disponga de 4 canales de registro de la actividad muscular. 
+
+
+Mi opinión es que se ha realizado un proyecto muy interesante, donde era necesario indagar e investigar en cada uno de los objetivos específicos para llegar a obtener una buena solución para el objetivo general del proyecto.
+
+
+
+\section{Trabajos Futuros}
+Con respecto a los trabajos futuros creo que es un proyecto muy interesante que aporta una gran cantidad de información sobre que tipos de clasificadores y condiciones son las óptimas si se quiere llevar al mercado esta idea.
+
+Debido a todo lo comentado anteriormente, pienso que se ha realizado un buen proyecto, que puede ser utilizado por algún emprendedor, como recurso para ver que sistema de clasificación sería mas conveniente implementar y desarrollar en un sistema de EMG final, para llevarlo al mercado y que sea utilizado por los médicos y fisioterapeutas. Por ejemplo, sería de gran utilidad que si un paciente siente molestia en su rodilla durante la actividad física o su vida cotidiana, realizar un análisis con una herramienta como la explicada en este proyecto y analizar el rendimiento de la musculatura de su pierna.
+
+También podría ser un complemento a la herramienta base de mDurance. Dicha herramienta solo capta, analiza la señal EMG y extrae las correspondientes características. Con este nuevo complemento, también se dotaría al fisioterapeuta de una opción para analizar la fatiga muscular. Se podría hallar que músculos se han fatigado antes, y si se ha producido dicha fatiga, el orden en que se han fatigado, ya que una alteración en la fatiga puede ser indicativo de una compensación muscular debido a una lesión. (Para mayor detalle ver \ref{compM}).
+
+Para finalizar cabe aclarar que esta herramienta, es claramente orientativa para médicos y fisioterapeutas. Serviría de apoyo a la hora de realizar sus diagnósticos. Ellos son los que realmente tienen la última palabra sobre el diagnostico.
+
+
